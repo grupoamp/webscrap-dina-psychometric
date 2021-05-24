@@ -1,0 +1,75 @@
+---
+title: "I. Web Scrapping of DINA - Concytec"
+author: "Brian N. Peña-Calero"
+date: "23/5/2021"
+output: 
+  html_document: 
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+    highlight: kate
+    theme: flatly
+editor_options: 
+  chunk_output_type: console
+---
+
+# First step
+
+The [ALICIA - Concytec page](https://alicia.concytec.gob.pe) was used to search for undergraduate theses with the following search strategy:
+
+> ("Análisis Factorial" OR "Análisis de Componentes Principales" OR "ACP" OR "confiabilidad" OR "fiabilidad" OR "análisis psicométrico" OR "baremación") OR (("validez" OR "validación" OR "adaptación" OR "construcción" OR "estandarización") AND ("escala" OR "batería de pruebas" OR "prueba psicológica" OR "instrumento" OR "cuestionario" OR "test"))
+
+In addition, the following filters were used:
+
+- Year from 2011 to 2020
+- Undergraduate thesis
+- Open Access thesis
+
+All this is kept in a static link that will be used to inspect and store the data in an excel file.
+
+```{r}
+library(rvest)
+library(tidyverse)
+
+url <- "https://alicia.concytec.gob.pe/vufind/Search/Results?filter%5B%5D=format%3A%22bachelorThesis%22&filter%5B%5D=eu_rights_str_mv%3A%22openAccess%22&lookfor=%28%E2%80%9CAn%C3%A1lisis+Factorial%E2%80%9D+OR+%E2%80%9CAn%C3%A1lisis+de+Componentes+Principales%E2%80%9D+OR+%E2%80%9CACP%E2%80%9D+OR+%E2%80%9Cconfiabilidad%E2%80%9D+OR+%E2%80%9Cfiabilidad%E2%80%9D+OR+%E2%80%9Can%C3%A1lisis+psicom%C3%A9trico%E2%80%9D+OR+%22baremaci%C3%B3n%22%29+OR+%28%28%E2%80%9Cvalidez%E2%80%9D+OR+%22validaci%C3%B3n%22+OR+%22adaptaci%C3%B3n%22+OR+%22construcci%C3%B3n%22+OR+%22estandarizaci%C3%B3n%22%29+AND+%28%22escala%22+OR+%E2%80%9Cbater%C3%ADa+de+pruebas%E2%80%9D+OR+%E2%80%9Cprueba+psicol%C3%B3gica%E2%80%9D+OR+%22instrumento%22+OR+%22cuestionario%22+OR+%22test%22%29%29&type=AllFields&daterange%5B%5D=publishDate&publishDatefrom=2011&publishDateto=2020"
+
+dina_html <- read_html(url) 
+```
+
+## Determinate the number of pages
+
+
+```{r}
+last_n_page <- dina_html %>% 
+  html_elements(".pagination li:last-child") %>% 
+  html_text2() %>% 
+  str_extract("[0-9]+")
+
+last_n_page
+```
+
+## Loop for extract links in every pages avaible
+
+
+```{r}
+tmp <- list()
+href_dina <- list()
+for (i in seq_len(last_n_page)) {
+  tmp[[i]] <- paste0(url, "&page=", last_n_page)
+  
+  href_dina[[i]] <- tmp[[i]] %>%
+    read_html() %>% 
+    html_elements(".result .row .link a") %>% 
+    html_attrs() %>% 
+    unlist() %>% 
+    as_tibble()
+}
+```
+
+
+
+
+
+
+
+
