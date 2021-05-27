@@ -10,7 +10,7 @@ output:
     highlight: kate
     theme: flatly
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 # First step
@@ -89,28 +89,10 @@ complete_href_dina <- href_dina %>%
 complete_href_dina
 ```
 
-
-```{r}
-html_tesis <- read_html(complete_href_dina$tesis_url[1])
-```
-
-
-```{r}
-
-
-
-html_tesis %>% 
-  html_table()
-
-html_tesis %>% 
-  html_elements(".media-body h1") %>% 
-  html_text2() 
-```
-
-
 # Loop for read all thesis 
 
 ## Read html of each thesis
+
 ```{r}
 read_html_thesis <- vector("list", nrow(complete_href_dina))
 
@@ -148,15 +130,79 @@ for (i in seq_len(nrow(complete_href_dina))) {
 
 ## Extract information
 
-```{r}
+This function help to extract information about thesis like title, abstract, etc.
 
+```{r}
+extract_information <- function(html) {
+  titulo <- html %>% 
+    html_elements(".media-body h1") %>% 
+    html_text2() %>% 
+    tibble(Titulo = .)
+  
+  info_ident <- html %>%  
+    html_table() %>% 
+    magrittr::extract2(1) %>% 
+    mutate(X1 = str_remove(X1, ":")) %>% 
+    pivot_wider(
+      names_from = X1,
+      values_from = X2
+    )
+  
+  resumen <- html %>%  
+    html_table() %>% 
+    magrittr::extract2(2) %>% 
+    mutate(X1 = str_remove(X1, ":")) %>% 
+    pivot_wider(
+      names_from = X1,
+      values_from = X2
+    )
+  
+  information <- bind_cols(
+    info_ident,
+    titulo,
+    resumen
+  ) %>% 
+    relocate(Titulo, .after = "Autor Principal")
+  
+  return(information)
+}
 ```
 
+```{r}
+thesis_information <- vector("list", length(read_html_thesis))
 
+for (i in seq_len(length(read_html_thesis))) {
+  thesis_information[[i]] <- extract_information(read_html_thesis[[i]])
+}
+```
 
+Join full information about the thesis
 
+```{r}
+thesis_information <- bind_rows(thesis_information) %>% 
+  relocate(`Otros Autores`, .after = "Autor Principal")
 
+thesis_information
+```
 
+## Remove duplicates
 
+The table has `r nrow(thesis_information)` at the moment.
 
+```{r}
+thesis_final <- thesis_information %>% 
+  mutate(
+    titulo_tmp = str_to_upper(Titulo)
+  ) %>%
+  distinct(titulo_tmp, .keep_all = TRUE) %>% 
+  select(-c(titulo_tmp))
+```
 
+Now, it has `r nrow(thesis_final)`.
+
+# Export to XLSX
+
+```{r}
+openxlsx::write.xlsx(thesis_final,
+                     "Table complet thesis psychometric.xlsx")
+```
