@@ -3,7 +3,7 @@ title: "I. Web Scrapping of DINA - Concytec"
 author: "Brian N. Peña-Calero"
 date: "23/5/2021"
 output: 
-  html_document: 
+  html_notebook: 
     number_sections: yes
     toc: yes
     toc_float: yes
@@ -50,21 +50,108 @@ last_n_page
 
 ## Loop for extract links in every pages avaible
 
+```{r}
+options(timeout= 1e+10)
+```
 
 ```{r}
+group_pages <- split(seq_len(last_n_page), ceiling(seq_len(last_n_page)/50))
+
 tmp <- list()
 href_dina <- list()
-for (i in seq_len(last_n_page)) {
-  tmp[[i]] <- paste0(url, "&page=", last_n_page)
-  
-  href_dina[[i]] <- tmp[[i]] %>%
-    read_html() %>% 
-    html_elements(".result .row .link a") %>% 
-    html_attrs() %>% 
-    unlist() %>% 
-    as_tibble()
+
+for (i in seq_along(group_pages)) {
+  for (j in group_pages[[i]]) {
+    tmp[[j]] <- paste0(url, "&page=", j)
+
+    href_dina[[j]] <- tmp[[j]] %>%
+      read_html() %>%
+      html_elements(".result .row .link a") %>%
+      html_attrs() %>%
+      unlist() %>%
+      as_tibble()
+
+    print(j)
+  }
+  Sys.sleep(120)
 }
 ```
+
+```{r}
+complete_href_dina <- href_dina %>% 
+  bind_rows() %>% 
+  mutate(
+    tesis_url = paste0("https://alicia.concytec.gob.pe",
+                       value)
+  ) %>% 
+  select(-value)
+
+complete_href_dina
+```
+
+
+```{r}
+html_tesis <- read_html(complete_href_dina$tesis_url[1])
+```
+
+
+```{r}
+
+
+
+html_tesis %>% 
+  html_table()
+
+html_tesis %>% 
+  html_elements(".media-body h1") %>% 
+  html_text2() 
+```
+
+
+# Loop for read all thesis 
+
+## Read html of each thesis
+```{r}
+read_html_thesis <- vector("list", nrow(complete_href_dina))
+
+for (i in seq_len(nrow(complete_href_dina))) {
+  if (!(complete_href_dina$tesis_url[i] %in% names(read_html_thesis))) {
+    cat(paste("Doing thesis number", i, "..."))
+    ok <- FALSE
+    counter <- 0
+    while (ok == FALSE & counter <= 10) {
+      counter <- counter + 1
+      out <- tryCatch(
+        expr = {
+          complete_href_dina$tesis_url[i] %>% 
+            read_html()
+        },
+        error = function(e) {
+          Sys.sleep(2)
+          e
+        }
+      )
+      if ("error" %in% class(out)) {
+        cat(".")
+      } else {
+        ok <- TRUE
+        cat("Successful!")
+      }
+    }
+    cat("\n")
+    read_html_thesis[[i]] <- out
+    names(read_html_thesis)[i] <- complete_href_dina$tesis_url[i]
+  }
+}
+```
+
+
+## Extract information
+
+```{r}
+
+```
+
 
 
 
