@@ -51,29 +51,40 @@ last_n_page
 ## Loop for extract links in every pages avaible
 
 ```{r}
-options(timeout= 1e+10)
-```
+href_dina <- vector("list", last_n_page)
 
-```{r}
-group_pages <- split(seq_len(last_n_page), ceiling(seq_len(last_n_page)/50))
-
-tmp <- list()
-href_dina <- list()
-
-for (i in seq_along(group_pages)) {
-  for (j in group_pages[[i]]) {
-    tmp[[j]] <- paste0(url, "&page=", j)
-
-    href_dina[[j]] <- tmp[[j]] %>%
-      read_html() %>%
-      html_elements(".result .row .link a") %>%
-      html_attrs() %>%
-      unlist() %>%
-      as_tibble()
-
-    print(j)
+for (i in seq_len(last_n_page)) {
+  if (!(paste0("page=", i) %in% names(href_dina))) {
+    cat(paste("Getting url number", i, "..."))
+    ok <- FALSE
+    counter <- 0
+    while (ok == FALSE & counter <= 20) {
+      counter <- counter + 1
+      out <- tryCatch(
+        expr = {
+          paste0(url, "&page=", i) %>%
+            read_html() %>%
+            html_elements(".result .row .link a") %>%
+            html_attrs() %>%
+            unlist() %>%
+            as_tibble()
+        },
+        error = function(e) {
+          Sys.sleep(2)
+          e
+        }
+      )
+      if ("error" %in% class(out)) {
+        cat("Retrying...")
+      } else {
+        ok <- TRUE
+        cat("Successful!")
+      }
+    }
+    cat("\n")
+    href_dina[[i]] <- out
+    names(href_dina)[i] <- paste0("page=", i)
   }
-  Sys.sleep(120)
 }
 ```
 
@@ -86,7 +97,8 @@ complete_href_dina <- href_dina %>%
   ) %>% 
   select(-value)
 
-complete_href_dina
+complete_href_dina <- complete_href_dina %>% 
+  mutate(tesis_url = paste0(tesis_url, "/Details#tabnav"))
 ```
 
 # Loop for read all thesis 
@@ -101,7 +113,7 @@ for (i in seq_len(nrow(complete_href_dina))) {
     cat(paste("Doing thesis number", i, "..."))
     ok <- FALSE
     counter <- 0
-    while (ok == FALSE & counter <= 10) {
+    while (ok == FALSE & counter <= 20) {
       counter <- counter + 1
       out <- tryCatch(
         expr = {
@@ -146,23 +158,55 @@ extract_information <- function(html) {
     pivot_wider(
       names_from = X1,
       values_from = X2
-    )
+    ) %>% 
+    select(-Materia)
   
-  resumen <- html %>%  
+  tabla2 <- html %>% 
     html_table() %>% 
-    magrittr::extract2(2) %>% 
-    mutate(X1 = str_remove(X1, ":")) %>% 
+    magrittr::extract2(2)
+  
+  info_topic <- tabla2 %>% 
+    filter(X1 == "topic") %>% 
     pivot_wider(
       names_from = X1,
       values_from = X2
-    )
+    ) %>% 
+    rename("Tópicos" = topic)
   
-  information <- bind_cols(
-    info_ident,
-    titulo,
-    resumen
-  ) %>% 
-    relocate(Titulo, .after = "Autor Principal")
+  info_facultad <- tabla2 %>% 
+    filter(str_detect(X1, "thesis.degree.")) %>% 
+    pivot_wider(
+        names_from = X1,
+        values_from = X2
+      )
+  
+  resumen <- tabla2 %>% 
+    filter(X1 == "description") %>% 
+    pivot_wider(
+        names_from = X1,
+        values_from = X2
+      ) %>% 
+    rename(Resumen = description)
+  
+  if (nrow(info_facultad) == 0) {
+    information <- bind_cols(
+      info_ident,
+      info_topic,
+      titulo,
+      resumen
+    ) %>% 
+      relocate(Titulo, .before = "Formato")
+  } else {
+    information <- bind_cols(
+      info_ident,
+      info_topic,
+      info_facultad,
+      titulo,
+      resumen
+    ) %>% 
+      relocate(Titulo, .before = "Formato")
+    
+  }
   
   return(information)
 }
@@ -173,14 +217,14 @@ thesis_information <- vector("list", length(read_html_thesis))
 
 for (i in seq_len(length(read_html_thesis))) {
   thesis_information[[i]] <- extract_information(read_html_thesis[[i]])
+  print(i)
 }
 ```
 
 Join full information about the thesis
 
 ```{r}
-thesis_information <- bind_rows(thesis_information) %>% 
-  relocate(`Otros Autores`, .after = "Autor Principal")
+thesis_information <- bind_rows(thesis_information) 
 
 thesis_information
 ```
