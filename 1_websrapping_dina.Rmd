@@ -234,7 +234,7 @@ thesis_information
 The table has `r nrow(thesis_information)` at the moment.
 
 ```{r}
-thesis_final <- thesis_information %>% 
+thesis_semifinal <- thesis_information %>% 
   mutate(
     titulo_tmp = str_to_upper(Titulo)
   ) %>%
@@ -243,6 +243,79 @@ thesis_final <- thesis_information %>%
 ```
 
 Now, it has `r nrow(thesis_final)`.
+
+## Keep with only some universities
+
+```{r}
+list_universidades <- readxl::read_excel("Lista_universidades.xlsx")
+
+thesis_semifinal <- thesis_semifinal %>% 
+  filter(Institución %in% list_universidades$Universidades) 
+```
+
+## Filter by discipline
+
+```{r}
+thesis_final <- thesis_semifinal %>% 
+  filter(str_detect(thesis.degree.discipline.none.fl_str_mv, 
+                    "(Psico|Psicól|Salud|ociales)") &
+         !str_detect(thesis.degree.discipline.none.fl_str_mv, 
+                     "(Psicomo|Desigualdades|Psiquiatr|Enfermer|Gerencia|Gesti|Doctorado)") |
+           is.na(thesis.degree.discipline.none.fl_str_mv))  %>% 
+  filter(!str_detect(thesis.degree.name.none.fl_str_mv, 
+                     "(Econom|Obstetri|Gesti|Licenciado en Educaci|Nutrici|nutrici|Administrac|ADMINISTRAC|Maestr|Segunda Especialidad|Médico Cirujano|Licenciados en Educación|Licenciada en Educaci|Tecnología M|Contador|Ingeniero|Ingeniería)") |
+           is.na(thesis.degree.name.none.fl_str_mv)) %>% 
+  filter(!thesis.degree.name.none.fl_str_mv %in% c("Bachiller en educación",
+                                                   "ARQUITECTO",
+                                                   "Licenciado en Ciencias de la Comunicación",
+                                                   "Químico Farmacéutico")) %>% 
+  filter(!str_detect(thesis.degree.level.none.fl_str_mv,
+                     "(Título de segunda especialidad|Farmacia|Tecnología M|Enfermer)") |
+           is.na(thesis.degree.level.none.fl_str_mv)) %>% 
+  filter(!str_detect(thesis.degree.grantor.none.fl_str_mv,
+                     "(Posgrado|Maestría|Maestria)") |
+           is.na(thesis.degree.grantor.none.fl_str_mv)) 
+```
+
+
+## Separate topics
+
+
+
+```{r}
+n_differents_topic <- thesis_final %>% 
+  mutate(
+    count_n = str_count(Tópicos, "\\R+")
+  ) %>% 
+  count(count_n) %>% 
+  pull(count_n) %>% 
+  last()
+```
+
+```{r}
+into_string <- paste0("Topico_", seq(1:14))
+```
+
+```{r}
+thesis_final <- thesis_final %>% 
+  separate("Tópicos", into = all_of(into_string), sep = "\n") %>%
+  mutate(
+    across(Topico_1:Topico_14, str_squish)
+  ) 
+```
+
+## Last format
+
+```{r}
+thesis_final <- thesis_final %>% 
+  mutate(ID = 1:nrow(.)) %>% 
+  relocate(ID, .before = `Autor Principal`) %>% 
+  relocate(`Otros Autores`, .after = `Autor Principal`) %>% 
+  relocate(thesis.degree.program.none.fl_str_mv, .before = Resumen)
+  
+
+thesis_final
+```
 
 # Export to XLSX
 
